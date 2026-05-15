@@ -1,0 +1,9 @@
+name: Cardinal
+description: $description
+version: '${version}'
+
+main: com.kobosh.cardinal.Cardinal
+api-version: '1.21'
+
+authors: [ koboshchan ]
+website: kobosh.com

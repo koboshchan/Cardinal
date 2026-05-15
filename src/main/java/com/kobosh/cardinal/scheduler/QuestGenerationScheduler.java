@@ -47,6 +47,7 @@ public class QuestGenerationScheduler {
         this.questGenerator = new QuestYamlGenerator(plugin, questsFolder, configManager.getOutputFolder());
         this.categoryGenerator = new CategoryGenerator(plugin, questsFolder);
         this.lastGenerationTime = System.currentTimeMillis();
+        restoreGeneratedQuestState();
     }
 
     /**
@@ -223,14 +224,7 @@ public class QuestGenerationScheduler {
     }
 
     private String generatePreviousSummary() {
-        if (generatedQuestIds.isEmpty()) {
-            return "";
-        }
-        StringBuilder summary = new StringBuilder();
-        for (String questId : generatedQuestIds) {
-            summary.append("- ").append(questId).append("\n");
-        }
-        return summary.toString();
+        return questGenerator.buildExistingQuestSummary(60);
     }
 
     public List<String> getGeneratedQuestIds() {
@@ -247,5 +241,16 @@ public class QuestGenerationScheduler {
             prefix = "story";
         }
         return prefix + "_arc";
+    }
+
+    private void restoreGeneratedQuestState() {
+        List<String> existingQuestIds = questGenerator.loadExistingQuestIdsSorted();
+        if (existingQuestIds.isEmpty()) {
+            return;
+        }
+
+        generatedQuestIds.clear();
+        generatedQuestIds.addAll(existingQuestIds);
+        plugin.getLogger().info("Restored " + generatedQuestIds.size() + " generated quest(s) from disk");
     }
 }

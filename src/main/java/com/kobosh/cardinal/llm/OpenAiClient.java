@@ -253,7 +253,8 @@ public class OpenAiClient {
                 "Generate " + questCount + " sequential quests based on the following story context.\n\n" +
                 "Story Context: " + storyContext + "\n\n" +
                 (previousQuestsSummary.isEmpty() ? ""
-                        : "Previously Generated Quests:\n" + previousQuestsSummary + "\n\n")
+                : "Previously Generated Quests (treat as already used and DO NOT duplicate):\n"
+                    + previousQuestsSummary + "\n\n")
                 +
                 "Requirements:\n" +
                 "- Each quest should advance the story and be completable in ~20 minutes of gameplay\n" +
@@ -283,6 +284,8 @@ public class OpenAiClient {
                 "  * Hard quests (complex tasks, high amounts, multiple tasks): 500,000 - 1,500,000\n" +
                 "  * Base reward on task difficulty: more difficult tasks = higher rewards\n" +
                 "- Each quest unlocks the next; chain them with story progression\n" +
+                "- Hard constraint: do not create duplicate quests from Previously Generated Quests\n" +
+                "- Avoid near-duplicates too: no reused quest titles, same objective combinations, or same task targets with only tiny number changes\n" +
                 "- Make it engaging and narrative-driven\n\n" +
                 "JSON Schema (must be followed exactly):\n" +
                 QUEST_BATCH_JSON_SCHEMA + "\n\n" +

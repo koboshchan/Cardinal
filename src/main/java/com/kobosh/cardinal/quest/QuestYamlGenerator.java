@@ -4,6 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
@@ -90,31 +92,65 @@ public class QuestYamlGenerator {
 
         switch (taskType.toLowerCase(Locale.ROOT)) {
             case "farming":
-                String block = config.has("block") ? extractResourceName(config.get("block").getAsString()) : "crops";
-                return amount + " " + block.toLowerCase() + " gathered";
+                String farmTarget = extractSpecificTargets(config, "block", "blocks");
+                if (farmTarget != null) {
+                    return amount + " " + farmTarget + " gathered";
+                }
+                return amount + " crops gathered";
             case "milking":
-                String mob = config.has("mob") ? extractResourceName(config.get("mob").getAsString()) : "mobs";
-                return amount + " " + mob.toLowerCase() + " milked";
+                String milkTarget = extractSpecificTargets(config, "mob", "mobs");
+                if (milkTarget != null) {
+                    return amount + " " + milkTarget + " milked";
+                }
+                return amount + " mobs milked";
             case "mobkilling":
             case "mobkill":
+                String killTarget = extractSpecificTargets(config, "mob", "mobs");
+                if (killTarget != null) {
+                    return amount + " " + killTarget + " defeated";
+                }
                 return amount + " hostile mobs defeated";
             case "blockbreak":
+                String breakTarget = extractSpecificTargets(config, "block", "blocks");
+                if (breakTarget != null) {
+                    return amount + " " + breakTarget + " broken";
+                }
                 return amount + " blocks broken";
             case "blockplace":
+                String placeTarget = extractSpecificTargets(config, "block", "blocks");
+                if (placeTarget != null) {
+                    return amount + " " + placeTarget + " placed";
+                }
                 return amount + " blocks placed";
             case "crafting":
-                String craftItem = config.has("item") ? extractResourceName(config.get("item").getAsString()) : "items";
-                return amount + " " + craftItem.toLowerCase() + " crafted";
+                String craftTarget = extractSpecificTargets(config, "item", "items");
+                if (craftTarget != null) {
+                    return amount + " " + craftTarget + " crafted";
+                }
+                return amount + " items crafted";
             case "smelting":
-                String smeltItem = config.has("item") ? extractResourceName(config.get("item").getAsString()) : "items";
-                return amount + " " + smeltItem.toLowerCase() + " smelted";
+                String smeltTarget = extractSpecificTargets(config, "item", "items");
+                if (smeltTarget != null) {
+                    return amount + " " + smeltTarget + " smelted";
+                }
+                return amount + " items smelted";
             case "consume":
-                String consumeItem = config.has("item") ? extractResourceName(config.get("item").getAsString())
-                        : "items";
-                return amount + " " + consumeItem.toLowerCase() + " consumed";
+                String consumeTarget = extractSpecificTargets(config, "item", "items");
+                if (consumeTarget != null) {
+                    return amount + " " + consumeTarget + " consumed";
+                }
+                return amount + " items consumed";
             case "brewing":
+                String ingredientTarget = extractSpecificTargets(config, "ingredient", "ingredients");
+                if (ingredientTarget != null) {
+                    return amount + " potions brewed with " + ingredientTarget;
+                }
                 return amount + " potions brewed";
             case "itemmending":
+                String mendTarget = extractSpecificTargets(config, "item", "items");
+                if (mendTarget != null) {
+                    return amount + " " + mendTarget + " mended";
+                }
                 return amount + " items mended";
             case "walking":
                 String distance = config.has("distance") ? config.get("distance").getAsString() : "?";
@@ -135,6 +171,179 @@ public class QuestYamlGenerator {
         return Arrays.stream(resourceName.split("_"))
                 .map(word -> word.charAt(0) + word.substring(1).toLowerCase(Locale.ROOT))
                 .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private String extractSpecificTargets(JsonObject config, String singularKey, String pluralKey) {
+        List<String> targets = new ArrayList<>();
+
+        if (config.has(singularKey) && config.get(singularKey).isJsonPrimitive()) {
+            String value = config.get(singularKey).getAsString();
+            if (!value.isBlank()) {
+                targets.add(extractResourceName(value).toLowerCase(Locale.ROOT));
+            }
+        }
+
+        if (config.has(pluralKey) && config.get(pluralKey).isJsonArray()) {
+            JsonArray values = config.getAsJsonArray(pluralKey);
+            for (JsonElement value : values) {
+                if (value != null && value.isJsonPrimitive()) {
+                    String raw = value.getAsString();
+                    if (!raw.isBlank()) {
+                        targets.add(extractResourceName(raw).toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+        }
+
+        if (targets.isEmpty()) {
+            return null;
+        }
+
+        // Preserve order but remove duplicates to keep placeholder text concise.
+        LinkedHashSet<String> unique = new LinkedHashSet<>(targets);
+        String joined = String.join(", ", unique);
+        return "\"" + joined + "\"";
+    }
+
+    /**
+     * Build a compact summary of existing generated quests so the LLM can avoid
+     * duplicate quests across restarts and manual generations.
+     */
+    public String buildExistingQuestSummary(int maxEntries) {
+        if (maxEntries <= 0) {
+            return "";
+        }
+
+        List<QuestSummary> summaries = collectQuestSummaries();
+
+        if (summaries.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        int limit = Math.min(maxEntries, summaries.size());
+        for (int i = 0; i < limit; i++) {
+            QuestSummary summary = summaries.get(i);
+            builder.append("- ")
+                    .append(summary.questId)
+                    .append(" | ")
+                    .append(summary.title)
+                    .append(" | ")
+                    .append(summary.taskSummary)
+                    .append("\n");
+        }
+
+        return builder.toString();
+    }
+
+    /**
+     * Restore existing quest IDs from generated quest files in sort order.
+     */
+    public List<String> loadExistingQuestIdsSorted() {
+        List<QuestSummary> summaries = collectQuestSummaries();
+        List<String> ids = new ArrayList<>();
+        for (QuestSummary summary : summaries) {
+            ids.add(summary.questId);
+        }
+        return ids;
+    }
+
+    private List<QuestSummary> collectQuestSummaries() {
+        if (!questsOutputFolder.exists()) {
+            return new ArrayList<>();
+        }
+
+        File[] files = questsOutputFolder.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (files == null || files.length == 0) {
+            return new ArrayList<>();
+        }
+
+        List<QuestSummary> summaries = new ArrayList<>();
+        for (File file : files) {
+            try {
+                YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+                String questId = file.getName().substring(0, file.getName().length() - 4);
+                int sortOrder = yaml.getInt("options.sort-order", Integer.MAX_VALUE);
+                String title = normalizeText(yaml.getString("display.name", questId));
+                String taskSummary = summarizeTasks(yaml.getConfigurationSection("tasks"));
+                summaries.add(new QuestSummary(sortOrder, questId, title, taskSummary));
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to summarize quest file '" + file.getName() + "': " + e.getMessage());
+            }
+        }
+
+        summaries.sort(Comparator
+                .comparingInt((QuestSummary s) -> s.sortOrder)
+                .thenComparing(s -> s.questId));
+        return summaries;
+    }
+
+    private String summarizeTasks(ConfigurationSection tasksSection) {
+        if (tasksSection == null) {
+            return "no tasks";
+        }
+
+        List<String> summaries = new ArrayList<>();
+        for (String taskId : tasksSection.getKeys(false)) {
+            ConfigurationSection taskSection = tasksSection.getConfigurationSection(taskId);
+            if (taskSection == null) {
+                continue;
+            }
+
+            String type = normalizeText(taskSection.getString("type", "task")).toLowerCase(Locale.ROOT);
+            String amount = taskSection.contains("amount")
+                    ? String.valueOf(taskSection.getInt("amount"))
+                    : (taskSection.contains("distance") ? String.valueOf(taskSection.getInt("distance")) : "?");
+
+            String target = extractTaskTarget(taskSection);
+            if (target == null || target.isBlank()) {
+                summaries.add(type + " x" + amount);
+            } else {
+                summaries.add(type + "(" + target + ") x" + amount);
+            }
+        }
+
+        if (summaries.isEmpty()) {
+            return "no tasks";
+        }
+        return String.join("; ", summaries);
+    }
+
+    private String extractTaskTarget(ConfigurationSection taskSection) {
+        List<String> keysToCheck = Arrays.asList("item", "ingredient", "block", "mob");
+        for (String key : keysToCheck) {
+            Object value = taskSection.get(key);
+            if (value instanceof String) {
+                String normalized = ((String) value).trim();
+                if (!normalized.isBlank()) {
+                    return normalized;
+                }
+            }
+        }
+
+        List<String> listKeysToCheck = Arrays.asList("items", "ingredients", "blocks", "mobs");
+        for (String key : listKeysToCheck) {
+            List<String> values = taskSection.getStringList(key);
+            if (!values.isEmpty()) {
+                return String.join(",", values);
+            }
+        }
+
+        return null;
+    }
+
+    private static class QuestSummary {
+        private final int sortOrder;
+        private final String questId;
+        private final String title;
+        private final String taskSummary;
+
+        private QuestSummary(int sortOrder, String questId, String title, String taskSummary) {
+            this.sortOrder = sortOrder;
+            this.questId = questId;
+            this.title = title;
+            this.taskSummary = taskSummary;
+        }
     }
 
     private String generateQuest(JsonObject questObj, String categoryName, String previousQuestId, int sortOrder)

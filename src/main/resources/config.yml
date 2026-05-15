@@ -1,0 +1,49 @@
+# Cardinal Quest Generator Configuration
+
+# Enable/disable the quest generation system
+enabled: true
+
+# LLM (OpenAI-compatible) API configuration
+llm:
+  # Base URL for the API endpoint (e.g., https://api.openai.com/v1)
+  base_url: "https://api.openai.com/v1"
+  
+  # API key for authentication
+  api_key: "your-api-key-here"
+  
+  # Model name to use (e.g., gpt-3.5-turbo, gpt-4)
+  model: "gpt-3.5-turbo"
+  
+  # Temperature for response generation (0.0-2.0)
+  temperature: 0.7
+  
+  # Maximum tokens in response
+  max_tokens: 2048
+  
+  # Request timeout in seconds
+  timeout_seconds: 30
+
+# Quest generation configuration
+generation:
+  # Number of Minecraft days between generations (1 MC day = 20 minutes)
+  days_per_generation: 1
+  
+  # Number of quests to generate per batch
+  quests_per_batch: 3
+  
+  # Maximum total quests that can be generated (-1 for infinite)
+  max_total_quests: 50
+  
+  # Output folder path (relative to Quests plugin folder)
+  output_folder: "quests/generated"
+  
+  # Log quest generation details
+  verbose_logging: true
+
+# Story configuration
+story:
+  # The initial story context prompt (set via /cardinal init command)
+  context: ""
+  
+  # Category name prefix for generated quests
+  category_prefix: "story"

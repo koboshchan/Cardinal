@@ -1,6 +1,6 @@
 name: Cardinal
-description: $description
-version: '${version}'
+description: "${description}"
+version: "${version}"
 
 main: com.kobosh.cardinal.Cardinal
 api-version: '1.21'
@@ -8,3 +8,9 @@ folia-supported: true
 
 authors: [ koboshchan ]
 website: kobosh.com
+
+depend: [ Quests ]
+commands:
+  cardinal:
+    description: Cardinal admin command
+    usage: "/cardinal <init|generate|reload|status>"

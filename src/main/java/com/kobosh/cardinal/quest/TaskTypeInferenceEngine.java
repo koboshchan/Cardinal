@@ -73,6 +73,16 @@ public class TaskTypeInferenceEngine {
                 return "Missing 'amount'";
             return null;
         });
+        validators.put("shearing", (obj) -> {
+            if (!obj.has("amount"))
+                return "Missing 'amount'";
+            return null;
+        });
+        validators.put("position", (obj) -> {
+            if (!obj.has("x") || !obj.has("y") || !obj.has("z") || !obj.has("world"))
+                return "Missing one or more required fields: x, y, z, world";
+            return null;
+        });
     }
 
     /**
@@ -93,7 +103,8 @@ public class TaskTypeInferenceEngine {
         for (int i = 0; i < requirements.size(); i++) {
             try {
                 JsonObject req = requirements.get(i).getAsJsonObject();
-                String type = req.has("type") ? req.get("type").getAsString() : null;
+                String rawType = req.has("type") ? req.get("type").getAsString() : null;
+                String type = canonicalizeTaskType(rawType);
 
                 if (type == null || type.isEmpty()) {
                     plugin.getLogger().warning("Requirement " + i + " missing 'type' field");
@@ -119,6 +130,20 @@ public class TaskTypeInferenceEngine {
         }
 
         return result;
+    }
+
+    private String canonicalizeTaskType(String type) {
+        if (type == null) {
+            return null;
+        }
+
+        String normalized = type.toLowerCase(Locale.ROOT);
+        // Quests v3.13+ treats smeltingcertain as an alias of smelting.
+        if ("smeltingcertain".equals(normalized)) {
+            return "smelting";
+        }
+
+        return normalized;
     }
 
     public static class RequirementConfig {

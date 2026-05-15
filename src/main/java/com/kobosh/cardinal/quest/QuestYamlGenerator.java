@@ -129,6 +129,7 @@ public class QuestYamlGenerator {
                 }
                 return amount + " items crafted";
             case "smelting":
+            case "smeltingcertain":
                 String smeltTarget = extractSpecificTargets(config, "item", "items");
                 if (smeltTarget != null) {
                     return amount + " " + smeltTarget + " smelted";
@@ -146,6 +147,19 @@ public class QuestYamlGenerator {
                     return amount + " potions brewed with " + ingredientTarget;
                 }
                 return amount + " potions brewed";
+            case "shearing":
+                String shearingColor = extractSpecificTargets(config, "color", "colors");
+                String shearingMob = extractSpecificTargets(config, "mob", "mobs");
+                if (shearingColor != null && shearingMob != null) {
+                    return amount + " " + shearingColor + " " + shearingMob + " sheared";
+                }
+                if (shearingColor != null) {
+                    return amount + " " + shearingColor + " shearables sheared";
+                }
+                if (shearingMob != null) {
+                    return amount + " " + shearingMob + " sheared";
+                }
+                return amount + " animals sheared";
             case "itemmending":
                 String mendTarget = extractSpecificTargets(config, "item", "items");
                 if (mendTarget != null) {
@@ -155,9 +169,42 @@ public class QuestYamlGenerator {
             case "walking":
                 String distance = config.has("distance") ? config.get("distance").getAsString() : "?";
                 return distance + " blocks walked";
+            case "position":
+                String x = config.has("x") ? config.get("x").getAsString() : "?";
+                String y = config.has("y") ? config.get("y").getAsString() : "?";
+                String z = config.has("z") ? config.get("z").getAsString() : "?";
+                String world = config.has("world") ? normalizeText(config.get("world").getAsString()) : "unknown world";
+                return "reach (" + x + ", " + y + ", " + z + ") in " + world;
             default:
                 return "Task in progress";
         }
+    }
+
+    /**
+     * Read the target value shown in progress displays (amount for most tasks, distance for walking).
+     */
+    private String getProgressTargetValue(String taskType, JsonObject config) {
+        if ("position".equalsIgnoreCase(taskType)) {
+            return "1";
+        }
+        if ("walking".equalsIgnoreCase(taskType)) {
+            return config.has("distance") ? config.get("distance").getAsString() : "?";
+        }
+        return config.has("amount") ? config.get("amount").getAsString() : "?";
+    }
+
+    /**
+     * Remove a duplicated leading target number from task descriptions (e.g. "20 wheat..." -> "wheat...").
+     */
+    private String stripLeadingTarget(String text, String target) {
+        if (text == null) {
+            return "";
+        }
+        if (target == null || target.isBlank()) {
+            return text;
+        }
+        String prefix = target + " ";
+        return text.startsWith(prefix) ? text.substring(prefix.length()) : text;
     }
 
     /**
@@ -293,7 +340,8 @@ public class QuestYamlGenerator {
             String type = normalizeText(taskSection.getString("type", "task")).toLowerCase(Locale.ROOT);
             String amount = taskSection.contains("amount")
                     ? String.valueOf(taskSection.getInt("amount"))
-                    : (taskSection.contains("distance") ? String.valueOf(taskSection.getInt("distance")) : "?");
+                    : (taskSection.contains("distance") ? String.valueOf(taskSection.getInt("distance"))
+                        : ("position".equals(type) ? "1" : "?"));
 
             String target = extractTaskTarget(taskSection);
             if (target == null || target.isBlank()) {
@@ -310,7 +358,7 @@ public class QuestYamlGenerator {
     }
 
     private String extractTaskTarget(ConfigurationSection taskSection) {
-        List<String> keysToCheck = Arrays.asList("item", "ingredient", "block", "mob");
+        List<String> keysToCheck = Arrays.asList("item", "ingredient", "block", "mob", "color", "world");
         for (String key : keysToCheck) {
             Object value = taskSection.get(key);
             if (value instanceof String) {
@@ -321,7 +369,7 @@ public class QuestYamlGenerator {
             }
         }
 
-        List<String> listKeysToCheck = Arrays.asList("items", "ingredients", "blocks", "mobs");
+        List<String> listKeysToCheck = Arrays.asList("items", "ingredients", "blocks", "mobs", "colors");
         for (String key : listKeysToCheck) {
             List<String> values = taskSection.getStringList(key);
             if (!values.isEmpty()) {
@@ -382,6 +430,7 @@ public class QuestYamlGenerator {
         int taskIndex = 0;
         List<String> taskIds = new ArrayList<>();
         Map<String, String> taskDescriptions = new HashMap<>();
+        Map<String, String> taskTargets = new HashMap<>();
         for (TaskTypeInferenceEngine.RequirementConfig req : requirements) {
             String taskId = "task" + taskIndex;
             taskIds.add(taskId);
@@ -398,6 +447,7 @@ public class QuestYamlGenerator {
 
             // Generate task description for progress placeholder
             taskDescriptions.put(taskId, generateTaskDescription(req.type, req.config));
+            taskTargets.put(taskId, getProgressTargetValue(req.type, req.config));
             taskIndex++;
         }
 
@@ -418,14 +468,24 @@ public class QuestYamlGenerator {
         yaml.append("    - \"&7Status: &fIn Progress\"\n");
         for (String taskId : taskIds) {
             String progressDesc = taskDescriptions.getOrDefault(taskId, "Task in progress");
+            String taskTarget = taskTargets.getOrDefault(taskId, "?");
+            String progressLabel = stripLeadingTarget(progressDesc, taskTarget);
             List<String> progressLines = wrapTextBy10Words(progressDesc);
             if (progressLines.isEmpty()) {
-                yaml.append("    - \"&7 - &f{").append(taskId).append(":progress}\"\n");
+                yaml.append("    - \"&7 - &f{").append(taskId).append(":progress}/")
+                        .append(escapeYamlString(taskTarget)).append("\"\n");
             } else {
-                yaml.append("    - \"&7 - &f{").append(taskId).append(":progress} ")
-                        .append(escapeYamlString(progressLines.get(0))).append("\"\n");
-                for (int i = 1; i < progressLines.size(); i++) {
-                    yaml.append("    - \"&7   ").append(escapeYamlString(progressLines.get(i))).append("\"\n");
+                List<String> progressLabelLines = wrapTextBy10Words(progressLabel);
+                if (progressLabelLines.isEmpty()) {
+                    yaml.append("    - \"&7 - &f{").append(taskId).append(":progress}/")
+                            .append(escapeYamlString(taskTarget)).append("\"\n");
+                } else {
+                    yaml.append("    - \"&7 - &f{").append(taskId).append(":progress}/")
+                            .append(escapeYamlString(taskTarget)).append(" ")
+                            .append(escapeYamlString(progressLabelLines.get(0))).append("\"\n");
+                    for (int i = 1; i < progressLabelLines.size(); i++) {
+                        yaml.append("    - \"&7   ").append(escapeYamlString(progressLabelLines.get(i))).append("\"\n");
+                    }
                 }
             }
         }
@@ -559,6 +619,8 @@ public class QuestYamlGenerator {
                 || normalizedKey.equals("blocks")
                 || normalizedKey.equals("mob")
                 || normalizedKey.equals("mobs")
+                || normalizedKey.equals("color")
+                || normalizedKey.equals("colors")
                 || normalizedKey.equals("spawn_reason")
                 || normalizedKey.equals("spawn_reasons");
     }

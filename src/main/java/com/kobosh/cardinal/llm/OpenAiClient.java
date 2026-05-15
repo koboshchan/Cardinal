@@ -262,10 +262,14 @@ public class OpenAiClient {
                 "- Each quest must have: title, description (~50 words), instructions (what player does), " +
                 "finish (completion message), itemrewards (array of {name, amount}), moneyrewards (int), " +
                 "requirements (array of task objects with type-specific params)\n" +
-                "- Supported task types: walking, smelting, mobkilling, milking, itemmending, farming, " +
-                "crafting, consume, brewing, blockplace, blockbreak\n" +
+                "- Supported task types: walking, position, smelting, mobkilling, milking, itemmending, farming, " +
+                "crafting, consume, brewing, shearing, blockplace, blockbreak\n" +
+                "- Smelting alias: smeltingcertain is accepted and normalized to smelting\n" +
+                "- Smelting item semantics: when using smelting.item, specify the cooked/result item (e.g. STEAK), not the raw/input item (e.g. BEEF)\n"
+                +
                 "- Type-specific required params:\n" +
                 "  * walking: distance\n" +
+                "  * position: x + y + z + world\n" +
                 "  * smelting: amount\n" +
                 "  * mobkilling: amount\n" +
                 "  * milking: amount\n" +
@@ -274,6 +278,7 @@ public class OpenAiClient {
                 "  * crafting: amount + item\n" +
                 "  * consume: amount + item\n" +
                 "  * brewing: amount\n" +
+                "  * shearing: amount\n" +
                 "  * blockplace: amount\n" +
                 "  * blockbreak: amount\n" +
                 "- Use Quests field names for optional params such as block/blocks, mob/mobs, ingredient, mode, worlds, exact-match, reverse-if-broken, reverse-if-placed\n"
@@ -351,9 +356,36 @@ public class OpenAiClient {
                                         "additionalProperties": true
                                     },
                                     {
+                                        "required": ["type", "x", "y", "z", "world"],
+                                        "properties": {
+                                            "type": { "const": "position" },
+                                            "x": { "type": "integer" },
+                                            "y": { "type": "integer" },
+                                            "z": { "type": "integer" },
+                                            "world": { "type": "string", "minLength": 1 },
+                                            "distance-padding": { "type": "integer", "minimum": 0 }
+                                        },
+                                        "additionalProperties": true
+                                    },
+                                    {
                                         "required": ["type", "amount"],
                                         "properties": {
                                             "type": { "const": "smelting" },
+                                            "amount": { "type": "integer", "minimum": 1 },
+                                            "item": {},
+                                            "exact-match": { "type": "boolean" },
+                                            "mode": { "type": "string" },
+                                            "worlds": {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            }
+                                        },
+                                        "additionalProperties": true
+                                    },
+                                    {
+                                        "required": ["type", "amount"],
+                                        "properties": {
+                                            "type": { "const": "smeltingcertain" },
                                             "amount": { "type": "integer", "minimum": 1 },
                                             "item": {},
                                             "exact-match": { "type": "boolean" },
@@ -467,6 +499,28 @@ public class OpenAiClient {
                                             "amount": { "type": "integer", "minimum": 1 },
                                             "ingredient": {},
                                             "exact-match": { "type": "boolean" },
+                                            "worlds": {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            }
+                                        },
+                                        "additionalProperties": true
+                                    },
+                                    {
+                                        "required": ["type", "amount"],
+                                        "properties": {
+                                            "type": { "const": "shearing" },
+                                            "amount": { "type": "integer", "minimum": 1 },
+                                            "color": { "type": "string" },
+                                            "colors": {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            },
+                                            "mob": {},
+                                            "mobs": {
+                                                "type": "array",
+                                                "items": { "type": "string" }
+                                            },
                                             "worlds": {
                                                 "type": "array",
                                                 "items": { "type": "string" }

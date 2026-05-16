@@ -83,7 +83,10 @@ public class QuestsIntegration {
         };
 
         try {
-            Bukkit.getGlobalRegionScheduler().execute(plugin, reloadAction);
+            Object globalScheduler = Bukkit.class.getMethod("getGlobalRegionScheduler").invoke(null);
+            globalScheduler.getClass()
+                    .getMethod("execute", Plugin.class, Runnable.class)
+                    .invoke(globalScheduler, plugin, reloadAction);
         } catch (Throwable ignored) {
             Bukkit.getScheduler().runTask(plugin, reloadAction);
         }

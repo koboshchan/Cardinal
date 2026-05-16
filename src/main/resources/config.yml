@@ -47,3 +47,16 @@ story:
   
   # Category name prefix for generated quests
   category_prefix: "story"
+
+# Token usage tracking and optional spending estimation
+tokens:
+  # Persisted cumulative token counters
+  total_input: 0
+  total_output: 0
+
+  # Whether /cardinal status should show estimated spendings
+  calculate_spendings: false
+
+  # Pricing in your chosen currency, per 1,000,000 tokens
+  price_per_million_input: 0.0
+  price_per_million_output: 0.0

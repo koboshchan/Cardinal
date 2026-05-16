@@ -108,6 +108,18 @@ public class ConfigManager {
         saveConfig();
     }
 
+    public boolean shouldCalculateSpendings() {
+        return config.getBoolean("tokens.calculate_spendings", false);
+    }
+
+    public double getInputPricePerMillionTokens() {
+        return config.getDouble("tokens.price_per_million_input", 0.0);
+    }
+
+    public double getOutputPricePerMillionTokens() {
+        return config.getDouble("tokens.price_per_million_output", 0.0);
+    }
+
     private void saveConfig() {
         try {
             config.save(new File(plugin.getDataFolder(), "config.yml"));
@@ -126,6 +138,8 @@ public class ConfigManager {
         String baseUrl = getLlmBaseUrl();
         int daysPerGen = getDaysPerGeneration();
         int questsPerBatch = getQuestsPerBatch();
+        double inputPricePerMillion = getInputPricePerMillionTokens();
+        double outputPricePerMillion = getOutputPricePerMillionTokens();
 
         if (apiKey == null || apiKey.isEmpty() || apiKey.equals("your-api-key-here")) {
             plugin.getLogger().warning("LLM API key not configured!");
@@ -141,6 +155,10 @@ public class ConfigManager {
         }
         if (questsPerBatch <= 0) {
             plugin.getLogger().warning("quests_per_batch must be > 0");
+            return false;
+        }
+        if (inputPricePerMillion < 0 || outputPricePerMillion < 0) {
+            plugin.getLogger().warning("Token prices per million must be >= 0");
             return false;
         }
         return true;

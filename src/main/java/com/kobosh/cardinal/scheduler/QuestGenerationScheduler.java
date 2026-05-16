@@ -7,13 +7,13 @@ import com.kobosh.cardinal.integration.QuestsIntegration;
 import com.kobosh.cardinal.llm.OpenAiClient;
 import com.kobosh.cardinal.quest.CategoryGenerator;
 import com.kobosh.cardinal.quest.QuestYamlGenerator;
-import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class QuestGenerationScheduler {
 
@@ -24,7 +24,7 @@ public class QuestGenerationScheduler {
     private final QuestYamlGenerator questGenerator;
     private final CategoryGenerator categoryGenerator;
 
-    private ScheduledTask foliaGenerationTask;
+    private Object foliaGenerationTask;
     private org.bukkit.scheduler.BukkitTask bukkitGenerationTask;
     private List<String> generatedQuestIds;
     private String currentCategoryName;
@@ -33,6 +33,7 @@ public class QuestGenerationScheduler {
     private String storyTitle;
     private String storyItem;
     private String storyLore;
+    private final AtomicBoolean generationInProgress;
 
     public QuestGenerationScheduler(Plugin plugin, ConfigManager configManager, OpenAiClient llmClient,
             QuestsIntegration questsIntegration) {
@@ -42,6 +43,7 @@ public class QuestGenerationScheduler {
         this.questsIntegration = questsIntegration;
         this.generatedQuestIds = new ArrayList<>();
         this.storyMetadataGenerated = false;
+        this.generationInProgress = new AtomicBoolean(false);
 
         File questsFolder = questsIntegration.getQuestsFolder();
         this.questGenerator = new QuestYamlGenerator(plugin, questsFolder, configManager.getOutputFolder());
@@ -63,14 +65,7 @@ public class QuestGenerationScheduler {
         long daysPerGen = configManager.getDaysPerGeneration();
         long ticks = daysPerGen * 20 * 60 * 20; // MC day = 20 min = 24000 ticks
 
-        try {
-            foliaGenerationTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(
-                    plugin,
-                    task -> generateNextBatch(),
-                    ticks,
-                    ticks);
-        } catch (UnsupportedOperationException e) {
-            // Fallback for non-Folia runtimes.
+        if (!startFoliaSchedule(ticks)) {
             bukkitGenerationTask = Bukkit.getScheduler().runTaskTimer(plugin, this::generateNextBatch, ticks, ticks);
         }
 
@@ -84,7 +79,7 @@ public class QuestGenerationScheduler {
         boolean stopped = false;
 
         if (foliaGenerationTask != null) {
-            foliaGenerationTask.cancel();
+            cancelFoliaTask();
             foliaGenerationTask = null;
             stopped = true;
         }
@@ -111,7 +106,7 @@ public class QuestGenerationScheduler {
                 ? resolveDefaultCategoryName()
                 : categoryName;
         configManager.setStoryContext(storyContext);
-        generateNextBatch();
+        requestGeneration(configManager.getQuestsPerBatch());
     }
 
     /**
@@ -126,19 +121,36 @@ public class QuestGenerationScheduler {
                 ? resolveDefaultCategoryName()
                 : categoryName;
         configManager.setStoryContext(storyContext);
-        generateQuestBatch(questCount);
+        requestGeneration(questCount);
     }
 
     /**
      * Generate next batch of quests
      */
     private void generateNextBatch() {
-        generateQuestBatch(3);
+        requestGeneration(configManager.getQuestsPerBatch());
     }
 
     /**
      * Generate a quest batch with a specific count
      */
+    private void requestGeneration(int questCount) {
+        if (!generationInProgress.compareAndSet(false, true)) {
+            if (configManager.isVerboseLogging()) {
+                plugin.getLogger().info("Quest generation is already in progress; skipping overlapping request");
+            }
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                generateQuestBatch(questCount);
+            } finally {
+                generationInProgress.set(false);
+            }
+        });
+    }
+
     private void generateQuestBatch(int questCount) {
         if (!questsIntegration.isQuestsLoaded()) {
             plugin.getLogger().warning("Quests plugin not loaded, skipping generation");
@@ -252,5 +264,26 @@ public class QuestGenerationScheduler {
         generatedQuestIds.clear();
         generatedQuestIds.addAll(existingQuestIds);
         plugin.getLogger().info("Restored " + generatedQuestIds.size() + " generated quest(s) from disk");
+    }
+
+    private boolean startFoliaSchedule(long ticks) {
+        try {
+            Object globalScheduler = Bukkit.class.getMethod("getGlobalRegionScheduler").invoke(null);
+            java.util.function.Consumer<Object> task = ignored -> generateNextBatch();
+            foliaGenerationTask = globalScheduler.getClass()
+                    .getMethod("runAtFixedRate", Plugin.class, java.util.function.Consumer.class, long.class, long.class)
+                    .invoke(globalScheduler, plugin, task, ticks, ticks);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void cancelFoliaTask() {
+        try {
+            foliaGenerationTask.getClass().getMethod("cancel").invoke(foliaGenerationTask);
+        } catch (Throwable ignored) {
+            // Ignore and continue stopping Bukkit fallback task.
+        }
     }
 }

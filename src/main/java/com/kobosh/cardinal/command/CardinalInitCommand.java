@@ -52,6 +52,18 @@ public class CardinalInitCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§7Input tokens:  §f" + inputTokens);
             sender.sendMessage("§7Output tokens: §f" + outputTokens);
             sender.sendMessage("§7Total tokens:  §f" + totalTokens);
+
+            if (plugin.getConfigManager().shouldCalculateSpendings()) {
+                double inputPricePerMillion = plugin.getConfigManager().getInputPricePerMillionTokens();
+                double outputPricePerMillion = plugin.getConfigManager().getOutputPricePerMillionTokens();
+                double inputCost = (inputTokens / 1_000_000.0) * inputPricePerMillion;
+                double outputCost = (outputTokens / 1_000_000.0) * outputPricePerMillion;
+                double totalCost = inputCost + outputCost;
+
+                sender.sendMessage("§7Estimated input spend:  §f" + String.format(java.util.Locale.US, "%.6f", inputCost));
+                sender.sendMessage("§7Estimated output spend: §f" + String.format(java.util.Locale.US, "%.6f", outputCost));
+                sender.sendMessage("§7Estimated total spend:  §f" + String.format(java.util.Locale.US, "%.6f", totalCost));
+            }
             return true;
         }
 
@@ -92,7 +104,7 @@ public class CardinalInitCommand implements CommandExecutor, TabCompleter {
             String categoryName = (categoryPrefix == null || categoryPrefix.isBlank()) ? "story_arc"
                     : categoryPrefix + "_arc";
             scheduler.generateQuestsWithCount(storyContext, categoryName, questCount);
-            sender.sendMessage("§aQuest batch generated! Check the Quests menu in-game.");
+            sender.sendMessage("§aQuest generation queued. It runs asynchronously and will reload Quests when done.");
             return true;
         }
 
@@ -124,7 +136,7 @@ public class CardinalInitCommand implements CommandExecutor, TabCompleter {
                 : categoryPrefix + "_arc";
         scheduler.initializeAndGenerate(prompt, categoryName);
 
-        sender.sendMessage("§aInitial quest batch generated! Check the Quests menu in-game.");
+        sender.sendMessage("§aInitial quest generation queued. It runs asynchronously and will reload Quests when done.");
         return true;
     }
 

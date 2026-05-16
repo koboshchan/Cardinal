@@ -38,12 +38,18 @@ generation:
 story:
 	context: ""
 	category_prefix: "story"
+
+tokens:
+	calculate_spendings: false
+	price_per_million_input: 0.0
+	price_per_million_output: 0.0
 ```
 
 Notes:
 - `llm.api_key` is required.
 - `generation.max_total_quests` can be set to `-1` for no limit.
 - Token usage is persisted by Cardinal under `tokens.total_input` and `tokens.total_output`.
+- Enable `tokens.calculate_spendings` to show estimated costs in `/cardinal status`.
 
 ## Build
 
